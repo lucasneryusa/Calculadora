@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calculadora de Trabalho</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+      padding: 10px;
+      max-width: 600px;
+      margin: auto;
+    }
+    input, select, button {
+      width: 100%;
+      margin: 6px 0;
+      padding: 10px;
+      font-size: 1rem;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    .actions button {
+      margin: 0 4px;
+      padding: 4px 8px;
+    }
+    .summary {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Calculadora de Trabalho</h2>
+
+  <label>Data (padrão: hoje)</label>
+  <input type="date" id="data" />
+
+  <label>Pessoa</label>
+  <select id="pessoa">
+    <option value="Hugo">Hugo</option>
+    <option value="Julyanna">Julyanna</option>
+  </select>
+
+  <label>Horas trabalhadas</label>
+  <input type="number" id="horas" placeholder="Ex: 3" step="1"/>
+
+  <label>Minutos trabalhados</label>
+  <input type="number" id="minutos" placeholder="Ex: 45" step="1" max="59"/>
+
+  <label>Local</label>
+  <select id="local">
+    <option value="21.32">Richmond - $21.32/h</option>
+    <option value="22.01">El Cerrito - $22.01/h</option>
+    <option value="19.80">Contra Costa - $19.80/h</option>
+    <option value="19.80">Alameda - $19.80/h</option>
+    <option value="22.40">Berkeley - $22.40/h</option>
+  </select>
+
+  <label>Batch (valor inicial)</label>
+  <input type="number" id="batch" placeholder="Ex: 50.00" step="0.01"/>
+
+  <label>Tip</label>
+  <input type="number" id="gorjeta" placeholder="Ex: 25.00" step="0.01"/>
+
+  <button onclick="calcular()">Calcular e Salvar</button>
+
+  <div class="summary">
+    <label>Filtrar por semana:</label>
+    <input type="date" id="inicioSemana" />
+    <input type="date" id="fimSemana" />
+    <button onclick="filtrarSemana()">Filtrar Semana</button>
+    <div id="resumo-semana"></div>
+    <div id="resumo-hugo"></div>
+    <div id="resumo-julyanna"></div>
+    <div id="resumo-geral"></div>
+  </div>
+
+  <h3>Histórico</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Pessoa</th>
+        <th>Local</th>
+        <th>Tempo</th>
+        <th>Valor/h</th>
+        <th>Batch</th>
+        <th>Ajuste</th>
+        <th>Tip</th>
+        <th>Total</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody id="historicoBody"></tbody>
+  </table>
+
+  <!-- Firebase e funcionalidades -->
+  <script type="module">
+    // Importação e inicialização do Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDiib7UsDrrLhkHRPVScr-hWuAtR5_Ibz4",
+      authDomain: "novocalculadora.firebaseapp.com",
+      projectId: "novocalculadora",
+      storageBucket: "novocalculadora.firebasestorage.app",
+      messagingSenderId: "707047318254",
+      appId: "1:707047318254:web:d1b588959a94ba796b89ff"
+    };
+
+    const app = initializeApp(firebaseConfig);
+
+    // Dados locais
+    let historico = [];
+
+    function calcular() {
+      const data = document.getElementById('data').value || new Date().toISOString().split('T')[0];
+      const pessoa = document.getElementById('pessoa').value;
+      const horas = parseFloat(document.getElementById('horas').value) || 0;
+      const minutos = parseFloat(document.getElementById('minutos').value) || 0;
+      const valorHora = parseFloat(document.getElementById('local').value);
+      const batch = parseFloat(document.getElementById('batch').value) || 0;
+      const gorjeta = parseFloat(document.getElementById('gorjeta').value) || 0;
+
+      const tempoDecimal = horas + (minutos / 60);
+      let ajuste = (tempoDecimal * valorHora) - batch;
+      if (ajuste < 0) ajuste = 0;
+      const total = batch + ajuste + gorjeta;
+
+      historico.push({ data, pessoa, tempoDecimal, valorHora, batch, ajuste, gorjeta, total });
+      atualizarTabela();
+    }
+
+    function atualizarTabela() {
+      const tbody = document.getElementById('historicoBody');
+      tbody.innerHTML = '';
+      historico.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.data}</td>
+          <td>${item.pessoa}</td>
+          <td>$${item.valorHora.toFixed(2)}</td>
+          <td>${item.tempoDecimal.toFixed(2)}</td>
+          <td>$${item.valorHora.toFixed(2)}</td>
+          <td>$${item.batch.toFixed(2)}</td>
+          <td>$${item.ajuste.toFixed(2)}</td>
+          <td>$${item.gorjeta.toFixed(2)}</td>
+          <td>$${item.total.toFixed(2)}</td>
+          <td class="actions">
+            <button onclick="excluir(${index})">🗑</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      calcularResumos();
+    }
+
+    function excluir(index) {
+      historico.splice(index, 1);
+      atualizarTabela();
+    }
+
+    function filtrarSemana() {
+      const inicio = document.getElementById('inicioSemana').value;
+      const fim = document.getElementById('fimSemana').value;
+      if (!inicio || !fim) return;
+      const dadosFiltrados = historico.filter(item => item.data >= inicio && item.data <= fim);
+      calcularResumos(dadosFiltrados);
+    }
+
+    function calcularResumos(lista = historico) {
+      let totalSemana = 0;
+      let totalTips = 0;
+      let totalHugo = 0;
+      let totalJulyanna = 0;
+
+      lista.forEach(item => {
+        totalSemana += item.total;
+        totalTips += item.gorjeta;
+        if (item.pessoa === 'Hugo') totalHugo += item.total;
+        if (item.pessoa === 'Julyanna') totalJulyanna += item.total;
+      });
+
+      document.getElementById('resumo-semana').innerText = `Total da semana: $${totalSemana.toFixed(2)} | Tips: $${totalTips.toFixed(2)}`;
+      document.getElementById('resumo-hugo').innerText = `Total Hugo: $${totalHugo.toFixed(2)}`;
+      document.getElementById('resumo-julyanna').innerText = `Total Julyanna: $${totalJulyanna.toFixed(2)}`;
+      document.getElementById('resumo-geral').innerText = `Total geral: $${(totalHugo + totalJulyanna).toFixed(2)}`;
+    }
+
+    // Expor funções ao escopo global
+    window.calcular = calcular;
+    window.excluir = excluir;
+    window.filtrarSemana = filtrarSemana;
+  </script>
+</body>
+</html>

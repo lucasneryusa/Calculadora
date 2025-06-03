@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora com Firebase</title>
+  <style>
+    body { font-family: Arial; padding: 15px; max-width: 600px; margin: auto; }
+    input, select, button { width: 100%; padding: 10px; margin: 5px 0; }
+    table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    .summary { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>Calculadora de Trabalho</h2>
+
+  <label>Data</label>
+  <input type="date" id="data">
+
+  <label>Pessoa</label>
+  <select id="pessoa">
+    <option value="Hugo">Hugo</option>
+    <option value="Julyanna">Julyanna</option>
+  </select>
+
+  <label>Horas</label>
+  <input type="number" id="horas">
+
+  <label>Minutos</label>
+  <input type="number" id="minutos">
+
+  <label>Local</label>
+  <select id="local">
+    <option value="21.32">Richmond - $21.32</option>
+    <option value="22.01">El Cerrito - $22.01</option>
+    <option value="19.80">Contra Costa - $19.80</option>
+    <option value="19.80">Alameda - $19.80</option>
+    <option value="22.40">Berkeley - $22.40</option>
+  </select>
+
+  <label>Batch</label>
+  <input type="number" id="batch" step="0.01">
+
+  <label>Tip</label>
+  <input type="number" id="tip" step="0.01">
+
+  <button id="salvar">Calcular e Salvar</button>
+
+  <div class="summary" id="resumo"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th><th>Pessoa</th><th>Tempo</th><th>Valor/h</th><th>Batch</th>
+        <th>Ajuste</th><th>Tip</th><th>Total</th>
+      </tr>
+    </thead>
+    <tbody id="historico"></tbody>
+  </table>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAWsvc9fns5CiAOdaypsyO4wm5hvsSoL5w",
+      authDomain: "calculadorainstac.firebaseapp.com",
+      projectId: "calculadorainstac",
+      storageBucket: "calculadorainstac.firebasestorage.app",
+      messagingSenderId: "647947049633",
+      appId: "1:647947049633:web:5f32d1f250c2517ec4eee0",
+      measurementId: "G-4C9LJY37RH"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    document.getElementById("data").valueAsDate = new Date();
+
+    document.getElementById("salvar").addEventListener("click", async () => {
+      const data = document.getElementById("data").value;
+      const pessoa = document.getElementById("pessoa").value;
+      const horas = parseFloat(document.getElementById("horas").value) || 0;
+      const minutos = parseFloat(document.getElementById("minutos").value) || 0;
+      const tempoDecimal = horas + (minutos / 60);
+      const valorHora = parseFloat(document.getElementById("local").value);
+      const batch = parseFloat(document.getElementById("batch").value) || 0;
+      const tip = parseFloat(document.getElementById("tip").value) || 0;
+
+      let ajuste = (tempoDecimal * valorHora) - batch;
+      if (ajuste < 0) ajuste = 0;
+      const total = batch + ajuste + tip;
+
+      await addDoc(collection(db, "lancamentos"), {
+        data, pessoa, tempoDecimal, valorHora, batch, ajuste, tip, total
+      });
+
+      await carregar();
+    });
+
+    async function carregar() {
+      const tabela = document.getElementById("historico");
+      const resumo = document.getElementById("resumo");
+      tabela.innerHTML = "";
+      let totalHugo = 0, totalJulyanna = 0, totalGeral = 0;
+
+      const q = query(collection(db, "lancamentos"), orderBy("data", "desc"));
+      const snap = await getDocs(q);
+
+      snap.forEach(doc => {
+        const d = doc.data();
+        tabela.innerHTML += `<tr>
+          <td>${d.data}</td><td>${d.pessoa}</td><td>${d.tempoDecimal.toFixed(2)}</td>
+          <td>$${d.valorHora.toFixed(2)}</td><td>$${d.batch.toFixed(2)}</td>
+          <td>$${d.ajuste.toFixed(2)}</td><td>$${d.tip.toFixed(2)}</td><td>$${d.total.toFixed(2)}</td>
+        </tr>`;
+        if (d.pessoa === "Hugo") totalHugo += d.total;
+        else if (d.pessoa === "Julyanna") totalJulyanna += d.total;
+        totalGeral += d.total;
+      });
+
+      resumo.innerText = `Hugo: $${totalHugo.toFixed(2)} | Julyanna: $${totalJulyanna.toFixed(2)} | Total: $${totalGeral.toFixed(2)}`;
+    }
+
+    carregar();
+  </script>
+</body>
+</html>
